@@ -23,3 +23,5 @@ openapi-fastapi-client ./openapi.yaml ./my-client
 ```shell
 openapi-fastapi-client --help
 ```
+
+![](openapi-fastapi-client.gif)
