@@ -1,1 +1,0 @@
-# Openapi yaml file to FastApi Client

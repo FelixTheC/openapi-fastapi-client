@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "A tool to autogenerate FastApi Clients from given openapi.yaml."
 authors = ["FelixTheC <felixeisenmenger@gmx.net>"]
 license = "MIT"
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
