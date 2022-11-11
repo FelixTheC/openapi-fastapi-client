@@ -1,5 +1,4 @@
 from pathlib import Path
-from pprint import pprint
 from string import Template
 
 import black
@@ -44,7 +43,7 @@ class Api:
         cls_name = func_name.title().replace("_", "") + "Query"
         request_str = Template("""class $cls_name(BaseModel):
         $params""")
-        return request_str.substitute(cls_name=cls_name, params="\n\t".join(params)), cls_name
+        return request_str.substitute(cls_name=cls_name, params="\n".join(params)), cls_name
 
     def generate_obj_imports(self) -> None:
         for level_0 in self.paths.values():
@@ -213,14 +212,7 @@ class Api:
         data.append("\n")
         self.data = data
 
-    def write_api(self, folder: str):
-        folder_path = Path(folder)
-        if not folder_path.exists():
-            folder_path.mkdir(parents=True, exist_ok=True)
-            folder_path.cwd()
-            with (folder_path / Path("__init__.py")).open("w") as file:
-                file.write("\n")
-
+    def write_api(self, folder_path: Path):
         text = black.format_str("\n".join(self.data), mode=black.Mode())
 
         with (folder_path / Path("api.py")) as file:

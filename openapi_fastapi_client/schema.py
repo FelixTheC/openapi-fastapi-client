@@ -1,4 +1,8 @@
+from pathlib import Path
 from pprint import pprint
+from string import Template
+
+import black
 
 from openapi_fastapi_client.helpers import STR_FORMAT
 from openapi_fastapi_client.helpers import function_like_name_to_class_name
@@ -35,7 +39,7 @@ class Schema:
         }
         for name, type_info in component["properties"].items():
             is_optional = name in component.get("required", [])
-            delimiter = " = "
+            delimiter = ": "
             match type_info.get("type", "reference"):
                 case "string":
                     if type_info.get("maxLength") or type_info.get("minLength"):
@@ -91,5 +95,33 @@ class Schema:
         return class_info
 
     def generate_schemas(self):
+        self.generate_base_imports()
         for key, val in self.components.items():
             self.data.append(self.create_attribute(key, val))
+
+    def create_enum_class(self, data: dict):
+        params = "\n    ".join(data["attributes"])
+        return Template("""class $class_name(Enum):
+    $params
+        """).substitute(class_name=data["class_name"], params=params)
+
+    def create_schema_class(self, data: dict):
+        params = "\n    ".join(data["attributes"])
+        return Template("""class $class_name(BaseModel):
+    $params
+        """).substitute(class_name=data["class_name"], params=params)
+
+    def write_to_file(self, folder_path: Path, additional_data: list[str] = None):
+        data = []
+        data.extend(self.schema_imports)
+        data.append("\n")
+        if additional_data:
+            data.extend(additional_data)
+            data.append("\n")
+        data.extend([self.create_enum_class(obj) for obj in self.enums.values()])
+        data.append("\n")
+        data.extend([self.create_schema_class(obj) for obj in self.data])
+        text = black.format_str("\n".join(data), mode=black.Mode())
+
+        with (folder_path / Path("schema.py")) as file:
+            file.write_text(text)
