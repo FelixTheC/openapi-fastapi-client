@@ -1,17 +1,23 @@
 from pathlib import Path
-from pprint import pprint
 
+import typer
 import yaml
 
 from openapi_fastapi_client.api import Api
 from openapi_fastapi_client.schema import Schema
 
+app = typer.Typer()
 
-def main():
-    with (Path(__file__).parent / Path("openapi_mdm.yaml")).open("r") as yaml_file:
+
+@app.command()
+def main(openapi_file: Path, output_path: Path):
+    if not openapi_file.exists():
+        raise FileNotFoundError(f"{openapi_file} does not exists.")
+
+    with openapi_file.open("r") as yaml_file:
         yaml_data = yaml.load(yaml_file, Loader=yaml.CFullLoader)
 
-    folder_path = Path("./pet_store")
+    folder_path = output_path
     if not folder_path.exists():
         folder_path.mkdir(parents=True, exist_ok=True)
         folder_path.cwd()
@@ -21,11 +27,6 @@ def main():
     api = Api(yaml_data["paths"])
     schema = Schema(yaml_data["components"]["schemas"])
     schema.generate_schemas()
-    schema.write_to_file(folder_path)
-    # api.generate_apis(schema_path="pet_store.schema")
-    # api.write_api(folder="")
-    # schema.write_to_file(api.query_param_schemas)
-
-
-if __name__ == '__main__':
-    main()
+    api.generate_apis(schema_path="schema")
+    api.write_api(folder_path)
+    schema.write_to_file(folder_path, api.query_param_schemas)
