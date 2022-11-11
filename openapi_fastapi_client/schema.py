@@ -1,10 +1,11 @@
+from operator import itemgetter
 from pathlib import Path
 from pprint import pprint
 from string import Template
 
 import black
 
-from openapi_fastapi_client.helpers import STR_FORMAT
+from openapi_fastapi_client.helpers import STR_FORMAT, create_validator, TYPE_CONVERTION
 from openapi_fastapi_client.helpers import function_like_name_to_class_name
 from openapi_fastapi_client.helpers import number_constraints
 from openapi_fastapi_client.helpers import string_constraints
@@ -17,6 +18,7 @@ class Schema:
         self.schema_imports = set()
         self.enums = {}
         self.query_param_schemas = []
+        self.referenced_class = set()
 
     def generate_base_imports(self):
         self.schema_imports.add("from datetime import date, datetime")
@@ -29,13 +31,17 @@ class Schema:
             return enum_name
         else:
             self.schema_imports.add("from enum import Enum")
-            self.enums[enum_name] = {"class_name": enum_name, "attributes": [f"{obj} = '{obj}'" for obj in enum_values]}
+            self.enums[enum_name] = {"class_name": enum_name,
+                                     "attributes": [f"{obj.upper()} = '{obj}'" for obj in enum_values]}
             return enum_name
 
     def create_attribute(self, class_name: str, component: dict):
+        class_name = function_like_name_to_class_name(class_name)
         class_info = {
-            "class_name": function_like_name_to_class_name(class_name),
-            "attributes": []
+            "class_name": class_name,
+            "attributes": [],
+            "validators": [],
+            "index": 0 if class_name in self.referenced_class else 10,
         }
         for name, type_info in component["properties"].items():
             is_optional = name in component.get("required", [])
@@ -84,12 +90,21 @@ class Schema:
                 case "reference":
                     delimiter = ": "
                     ref = function_like_name_to_class_name(type_info["$ref"].split("/")[-1])
+                    self.referenced_class.add(ref)
+                    class_info["index"] = class_info["index"] + 1
                     type_hint = ref
                 case _:
                     type_hint = None
 
             if is_optional and type_hint is not None:
-                class_info["attributes"].append(f"{name}{delimiter}Optional[{type_hint}]")
+                class_info["attributes"].append(f"{name}{delimiter}Optional[{type_hint}] = None")
+                if not type_info.get("nullable", False):
+                    self.schema_imports.add("from pydantic import validator")
+                    try:
+                        field_type = TYPE_CONVERTION[type_info["type"]]
+                    except KeyError:
+                        field_type = type_hint
+                    class_info["validators"].append(create_validator(name, field_type))
             elif not is_optional and type_hint is not None:
                 class_info["attributes"].append(f"{name}{delimiter}{type_hint}")
         return class_info
@@ -98,6 +113,7 @@ class Schema:
         self.generate_base_imports()
         for key, val in self.components.items():
             self.data.append(self.create_attribute(key, val))
+        self.data.sort(key=itemgetter("index"))
 
     def create_enum_class(self, data: dict):
         params = "\n    ".join(data["attributes"])
@@ -107,9 +123,12 @@ class Schema:
 
     def create_schema_class(self, data: dict):
         params = "\n    ".join(data["attributes"])
+        validators = "\n".join(data["validators"])
         return Template("""class $class_name(BaseModel):
     $params
-        """).substitute(class_name=data["class_name"], params=params)
+    
+    $validators
+        """).substitute(class_name=data["class_name"], params=params, validators=validators)
 
     def write_to_file(self, folder_path: Path, additional_data: list[str] = None):
         data = []
