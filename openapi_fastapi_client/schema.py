@@ -87,6 +87,8 @@ class Schema:
                     delimiter = ": "
                     if reference := type_info["items"].get("$ref"):
                         ref = function_like_name_to_class_name(reference.split("/")[-1])
+                        self.referenced_class.add(ref)
+                        class_info["index"] = class_info["index"] + 1
                         type_hint = f"list[{ref}]"
                     else:
                         type_hint = "list"
