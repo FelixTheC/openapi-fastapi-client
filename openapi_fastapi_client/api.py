@@ -30,17 +30,18 @@ class Api:
     def generate_base_imports(self):
         self.data.append("import requests")
         self.data.append("from typing import Any, Optional")
+        self.data.append("\n")
 
     def get_component_obj_name(self, data: dict) -> str | None:
         if json_body := data["content"].get("application/json"):
             if "items" in json_body["schema"]:
-                return json_body["schema"]["items"]["$ref"]
+                return json_body["schema"]["items"].get("$ref", "Any")
             elif "$ref" in json_body["schema"]:
                 return json_body["schema"]["$ref"]
         return None
 
     def create_query_param_typedict(self, func_name: str, params: set) -> tuple[str, str]:
-        cls_name = func_name.title().replace("_", "") + "Query"
+        cls_name = func_name.title().replace("_", "").replace(" ", "") + "Query"
         request_str = Template("""class $cls_name(BaseModel):
         $params""")
         return request_str.substitute(cls_name=cls_name, params="\n".join(params)), cls_name
@@ -65,16 +66,17 @@ class Api:
             function_info["url"] = url
             for key, val_obj in val.items():
                 function_info["method"] = key
-                function_info["function_name"] = f"{val_obj['tags'][0]}_" \
+                function_info["function_name"] = f"{val_obj['tags'][0].replace(' ', '')}_" \
                                                  f"{key}_" \
                                                  f"{operation_id_to_function_name(val_obj['operationId'])}"
+                function_info["function_name"] = function_info["function_name"].lower()
                 if req_body := val_obj.get("requestBody"):
                     if json_data := req_body["content"].get("application/json"):
                         if "items" in json_data["schema"]:
                             obj_name = json_data["schema"]["items"]["$ref"].split("/")[-1]
                             function_info["request_obj"] = f"list[{obj_name}]"
                         else:
-                            function_info["request_obj"] = json_data["schema"]["$ref"].split("/")[-1]
+                            function_info["request_obj"] = json_data["schema"].get("$ref", "Any").split("/")[-1]
 
                 if parameters := val_obj.get("parameters"):
                     query_params = set()
@@ -92,18 +94,19 @@ class Api:
                                 type_info = f"Optional({TYPE_CONVERTION[obj['schema']['type']]})"
 
                             query_params.add(f"{obj['name']}: {type_info}")
-                    query_param_schema, param_schema_name = self.create_query_param_typedict(
-                        function_info["function_name"], query_params
-                    )
-                    self.schema_imports.add(param_schema_name)
-                    self.query_param_schemas.append(query_param_schema)
-                    function_info["query_parameters"] = param_schema_name
+                    if query_params:
+                        query_param_schema, param_schema_name = self.create_query_param_typedict(
+                            function_info["function_name"], query_params
+                        )
+                        self.schema_imports.add(param_schema_name)
+                        self.query_param_schemas.append(query_param_schema)
+                        function_info["query_parameters"] = param_schema_name
 
                 if responses := val_obj.get("responses"):
                     for content in responses.values():
                         if resp_content := content.get("content"):
                             if "items" in resp_content["application/json"]["schema"]:
-                                resp_ref = resp_content["application/json"]["schema"]["items"]["$ref"]
+                                resp_ref = resp_content["application/json"]["schema"]["items"].get("$ref", "{}")
                             elif "$ref" in resp_content["application/json"]["schema"]:
                                 resp_ref = resp_content["application/json"]["schema"]["$ref"]
                             elif "additionalProperties" in resp_content["application/json"]["schema"]:
@@ -111,11 +114,16 @@ class Api:
                                     resp_content["application/json"]["schema"]["additionalProperties"]["type"]
                                 ]
                             else:
-                                resp_ref = TYPE_CONVERTION[
-                                    resp_content["application/json"]["schema"]["type"]
-                                ]
-
-                            function_info["response_obj"] = resp_ref.split("/")[-1]
+                                try:
+                                    resp_ref = TYPE_CONVERTION[
+                                        resp_content["application/json"]["schema"]["type"]
+                                    ]
+                                except KeyError:
+                                    continue
+                            if resp_ref_ := resp_ref.split("/")[-1] in ("NoneType", "Metaclass"):
+                                function_info["response_obj"] = None
+                            else:
+                                function_info["response_obj"] = resp_ref.split("/")[-1]
                 self.data.append(self.create_request_function_str(function_info))
 
     def create_request_function_str(self, data: dict) -> str:
@@ -126,7 +134,7 @@ class Api:
 
         if data["request_obj"]:
             function_head_list.extend([f'req_data: {data["request_obj"]}', "/"])
-            request_call_params.append("json=req_data.dict()")
+            request_call_params.append("json=req_data.dict(exclude_unset=True)")
         if path_parameters:
             function_head_list.append(path_parameters)
         function_head_list.append("*")
@@ -207,8 +215,9 @@ class Api:
         self.generate_base_imports()
         self.generate_obj_imports()
         self.generate_request_functions()
-        objs_str = ", ".join(self.schema_imports)
-        data = [f"from {schema_path} import ({objs_str})", ] + self.data
+        objs_str = ",\n".join([obj for obj in self.schema_imports
+                               if obj not in ("AnyType", "Metaclass", "NoneType", "Any")])
+        data = [f"from {schema_path} import ({objs_str})", "\n"] + self.data
         data.append("\n")
         self.data = data
 

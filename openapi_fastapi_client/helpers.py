@@ -1,4 +1,5 @@
 import re
+from string import Template
 
 
 def operation_id_to_function_name(operation_id: str) -> str:
@@ -42,7 +43,7 @@ def string_constraints(type_info: dict) -> str:
     if min_ := type_info.get("min_length"):
         params.append(f"min_length={min_}")
     if max_ := type_info.get("maxLength"):
-        params.append(f"maxLength={max_}")
+        params.append(f"max_length={max_}")
 
     if params:
         return ",".join(params)
@@ -63,6 +64,20 @@ def number_constraints(type_info: dict) -> str:
     if params:
         return ",".join(params)
     return ""
+
+
+def create_validator(field_name: str, field_type: str):
+    function_name = f"optional_{field_name}"
+    return Template("""
+    @validator("$field_name")
+    def $function_name(cls, val: $field_type):
+        if val is not None:
+            return val
+        else:
+            raise ValueError("$field_name may not be None")
+        """).substitute(field_name=field_name,
+                        function_name=function_name,
+                        field_type=field_type)
 
 
 if __name__ == '__main__':
