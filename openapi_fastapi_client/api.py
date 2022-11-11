@@ -46,7 +46,7 @@ class Api:
             """class $cls_name(BaseModel):
         $params"""
         )
-        return request_str.substitute(cls_name=cls_name, params="\n".join(params)), cls_name
+        return request_str.substitute(cls_name=cls_name, params="\n\t".join(params)), cls_name
 
     def generate_obj_imports(self) -> None:
         for level_0 in self.paths.values():
@@ -99,7 +99,9 @@ class Api:
                             if obj.get("required"):
                                 type_info = TYPE_CONVERTION[obj["schema"]["type"]]
                             else:
-                                type_info = f"Optional({TYPE_CONVERTION[obj['schema']['type']]})"
+                                type_info = (
+                                    f"Optional[{TYPE_CONVERTION[obj['schema']['type']]}] = None"
+                                )
 
                             query_params.add(f"{obj['name']}: {type_info}")
                     if query_params:
