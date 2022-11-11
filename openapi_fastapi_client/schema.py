@@ -1,14 +1,18 @@
 from operator import itemgetter
 from pathlib import Path
-from pprint import pprint
 from string import Template
 
 import black
+import isort
 
-from openapi_fastapi_client.helpers import STR_FORMAT, create_validator, TYPE_CONVERTION
-from openapi_fastapi_client.helpers import function_like_name_to_class_name
-from openapi_fastapi_client.helpers import number_constraints
-from openapi_fastapi_client.helpers import string_constraints
+from openapi_fastapi_client.helpers import (
+    STR_FORMAT,
+    TYPE_CONVERTION,
+    create_validator,
+    function_like_name_to_class_name,
+    number_constraints,
+    string_constraints,
+)
 
 
 class Schema:
@@ -31,8 +35,10 @@ class Schema:
             return enum_name
         else:
             self.schema_imports.add("from enum import Enum")
-            self.enums[enum_name] = {"class_name": enum_name,
-                                     "attributes": [f"{obj.upper()} = '{obj}'" for obj in enum_values]}
+            self.enums[enum_name] = {
+                "class_name": enum_name,
+                "attributes": [f"{obj.upper()} = '{obj}'" for obj in enum_values],
+            }
             return enum_name
 
     def create_attribute(self, class_name: str, component: dict):
@@ -51,7 +57,7 @@ class Schema:
                     if type_info.get("maxLength") or type_info.get("minLength"):
                         self.schema_imports.add("from pydantic import constr")
                         params = string_constraints(type_info)
-                        type_hint = f'constr({params})'
+                        type_hint = f"constr({params})"
                     else:
                         delimiter = ": "
                         if format_ := type_info.get("format"):
@@ -117,18 +123,22 @@ class Schema:
 
     def create_enum_class(self, data: dict):
         params = "\n    ".join(data["attributes"])
-        return Template("""class $class_name(Enum):
+        return Template(
+            """class $class_name(Enum):
     $params
-        """).substitute(class_name=data["class_name"], params=params)
+        """
+        ).substitute(class_name=data["class_name"], params=params)
 
     def create_schema_class(self, data: dict):
         params = "\n    ".join(data["attributes"])
         validators = "\n".join(data["validators"])
-        return Template("""class $class_name(BaseModel):
+        return Template(
+            """class $class_name(BaseModel):
     $params
     
     $validators
-        """).substitute(class_name=data["class_name"], params=params, validators=validators)
+        """
+        ).substitute(class_name=data["class_name"], params=params, validators=validators)
 
     def write_to_file(self, folder_path: Path, additional_data: list[str] = None):
         data = []
@@ -142,5 +152,7 @@ class Schema:
         data.extend([self.create_schema_class(obj) for obj in self.data])
         text = black.format_str("\n".join(data), mode=black.Mode())
 
-        with (folder_path / Path("schema.py")) as file:
+        schema_file = folder_path / Path("schema.py")
+        with schema_file as file:
             file.write_text(text)
+            isort.api.sort_file(file)

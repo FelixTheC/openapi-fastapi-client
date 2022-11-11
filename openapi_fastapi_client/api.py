@@ -2,9 +2,9 @@ from pathlib import Path
 from string import Template
 
 import black
+import isort
 
-from openapi_fastapi_client.helpers import TYPE_CONVERTION
-from openapi_fastapi_client.helpers import operation_id_to_function_name
+from openapi_fastapi_client.helpers import TYPE_CONVERTION, operation_id_to_function_name
 
 
 def get_function_info_dict():
@@ -16,7 +16,7 @@ def get_function_info_dict():
         "query_parameters": "",
         "request_obj": "",
         "application_type": "application/json",
-        "response_obj": ""
+        "response_obj": "",
     }
 
 
@@ -42,8 +42,10 @@ class Api:
 
     def create_query_param_typedict(self, func_name: str, params: set) -> tuple[str, str]:
         cls_name = func_name.title().replace("_", "").replace(" ", "") + "Query"
-        request_str = Template("""class $cls_name(BaseModel):
-        $params""")
+        request_str = Template(
+            """class $cls_name(BaseModel):
+        $params"""
+        )
         return request_str.substitute(cls_name=cls_name, params="\n".join(params)), cls_name
 
     def generate_obj_imports(self) -> None:
@@ -66,9 +68,11 @@ class Api:
             function_info["url"] = url
             for key, val_obj in val.items():
                 function_info["method"] = key
-                function_info["function_name"] = f"{val_obj['tags'][0].replace(' ', '')}_" \
-                                                 f"{key}_" \
-                                                 f"{operation_id_to_function_name(val_obj['operationId'])}"
+                function_info["function_name"] = (
+                    f"{val_obj['tags'][0].replace(' ', '')}_"
+                    f"{key}_"
+                    f"{operation_id_to_function_name(val_obj['operationId'])}"
+                )
                 function_info["function_name"] = function_info["function_name"].lower()
                 if req_body := val_obj.get("requestBody"):
                     if json_data := req_body["content"].get("application/json"):
@@ -76,7 +80,9 @@ class Api:
                             obj_name = json_data["schema"]["items"]["$ref"].split("/")[-1]
                             function_info["request_obj"] = f"list[{obj_name}]"
                         else:
-                            function_info["request_obj"] = json_data["schema"].get("$ref", "Any").split("/")[-1]
+                            function_info["request_obj"] = (
+                                json_data["schema"].get("$ref", "Any").split("/")[-1]
+                            )
 
                 if parameters := val_obj.get("parameters"):
                     query_params = set()
@@ -86,10 +92,12 @@ class Api:
                             param_type = obj["schema"]["type"]
                             url = url.replace(obj["name"], param_name)
                             function_info["url"] = url
-                            function_info["path_parameters"].add(f"{param_name}: {TYPE_CONVERTION[param_type]}")
+                            function_info["path_parameters"].add(
+                                f"{param_name}: {TYPE_CONVERTION[param_type]}"
+                            )
                         elif obj["in"] == "query":
                             if obj.get("required"):
-                                type_info = TYPE_CONVERTION[obj['schema']['type']]
+                                type_info = TYPE_CONVERTION[obj["schema"]["type"]]
                             else:
                                 type_info = f"Optional({TYPE_CONVERTION[obj['schema']['type']]})"
 
@@ -106,12 +114,18 @@ class Api:
                     for content in responses.values():
                         if resp_content := content.get("content"):
                             if "items" in resp_content["application/json"]["schema"]:
-                                resp_ref = resp_content["application/json"]["schema"]["items"].get("$ref", "{}")
+                                resp_ref = resp_content["application/json"]["schema"]["items"].get(
+                                    "$ref", "{}"
+                                )
                             elif "$ref" in resp_content["application/json"]["schema"]:
                                 resp_ref = resp_content["application/json"]["schema"]["$ref"]
-                            elif "additionalProperties" in resp_content["application/json"]["schema"]:
+                            elif (
+                                "additionalProperties" in resp_content["application/json"]["schema"]
+                            ):
                                 resp_ref = TYPE_CONVERTION[
-                                    resp_content["application/json"]["schema"]["additionalProperties"]["type"]
+                                    resp_content["application/json"]["schema"][
+                                        "additionalProperties"
+                                    ]["type"]
                                 ]
                             else:
                                 try:
@@ -140,11 +154,14 @@ class Api:
         function_head_list.append("*")
         if query_param := data["query_parameters"]:
             function_head_list.append(f"params: {query_param}")
-        function_head_list.extend(["headers: Optional[dict] = None", "proxies: Optional[dict] = None", "**kwargs"])
+        function_head_list.extend(
+            ["headers: Optional[dict] = None", "proxies: Optional[dict] = None", "**kwargs"]
+        )
         request_call_params.extend(["headers=headers_, proxies=proxies_, **kwargs"])
 
         if data["query_parameters"] and not data["path_parameters"]:
-            function_str = Template("""def $function_name($function_params)$response_type:
+            function_str = Template(
+                """def $function_name($function_params)$response_type:
     
     headers_ = headers if headers is not None else {}
     proxies_ = proxies if proxies is not None else {}
@@ -154,9 +171,11 @@ class Api:
     if response_obj.ok:
         return $return_response
     return None
-                """)
+                """
+            )
         elif data["path_parameters"] and not data["query_parameters"]:
-            function_str = Template("""def $function_name($function_params)$response_type:
+            function_str = Template(
+                """def $function_name($function_params)$response_type:
     url = f"$url"
     headers_ = headers if headers is not None else {}
     proxies_ = proxies if proxies is not None else {}
@@ -166,9 +185,11 @@ class Api:
     if response_obj.ok:
         return $return_response
     return None
-                """)
+                """
+            )
         elif data["path_parameters"] and data["query_parameters"]:
-            function_str = Template("""def $function_name($function_params)$response_type:
+            function_str = Template(
+                """def $function_name($function_params)$response_type:
     url = f"$url"
     
     headers_ = headers if headers is not None else {}
@@ -179,9 +200,11 @@ class Api:
     if response_obj.ok:
         return $return_response
     return None
-                """)
+                """
+            )
         else:
-            function_str = Template("""def $function_name($function_params)$response_type:
+            function_str = Template(
+                """def $function_name($function_params)$response_type:
     headers_ = headers if headers is not None else {}
     proxies_ = proxies if proxies is not None else {}
     
@@ -190,33 +213,41 @@ class Api:
     if response_obj.ok:
         return $return_response
     return None
-                """)
+                """
+            )
 
-        if response_obj := data['response_obj']:
+        if response_obj := data["response_obj"]:
             response_type = f"-> Optional[{response_obj}]"
         else:
             response_type = "-> Any"
 
-        if response_obj := data['response_obj']:
+        if response_obj := data["response_obj"]:
             return_response = f"{response_obj}(**response_obj.json())"
         else:
             return_response = f"response_obj.json()"
 
-        return function_str.substitute(url=data["url"],
-                                       method=data["method"],
-                                       function_name=data["function_name"],
-                                       function_params=", ".join(function_head_list),
-                                       call_params=", ".join(request_call_params),
-                                       resp_obj=data["response_obj"],
-                                       return_response=return_response,
-                                       response_type=response_type)
+        return function_str.substitute(
+            url=data["url"],
+            method=data["method"],
+            function_name=data["function_name"],
+            function_params=", ".join(function_head_list),
+            call_params=", ".join(request_call_params),
+            resp_obj=data["response_obj"],
+            return_response=return_response,
+            response_type=response_type,
+        )
 
     def generate_apis(self, schema_path: str) -> None:
         self.generate_base_imports()
         self.generate_obj_imports()
         self.generate_request_functions()
-        objs_str = ",\n".join([obj for obj in self.schema_imports
-                               if obj not in ("AnyType", "Metaclass", "NoneType", "Any")])
+        objs_str = ",\n".join(
+            [
+                obj
+                for obj in self.schema_imports
+                if obj not in ("AnyType", "Metaclass", "NoneType", "Any")
+            ]
+        )
         data = [f"from {schema_path} import ({objs_str})", "\n"] + self.data
         data.append("\n")
         self.data = data
@@ -226,4 +257,4 @@ class Api:
 
         with (folder_path / Path("api.py")) as file:
             file.write_text(text)
-
+            isort.api.sort_file(file)
