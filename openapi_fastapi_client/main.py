@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import typer
 import yaml
@@ -10,7 +11,14 @@ app = typer.Typer()
 
 
 @app.command()
-def main(openapi_file: Path, output_path: Path):
+def main(openapi_file: Path, output_path: Path,
+         sync_req: Optional[bool] = typer.Option(True,
+                                                 "--sync",
+                                                 help="All requests to the client are synchronous."),
+         async_req: Optional[bool] = typer.Option(False,
+                                                  "--async",
+                                                  help="All requests to the client are asynchronous with aiohttp.")
+         ):
     if not openapi_file.exists():
         raise FileNotFoundError(f"{openapi_file} does not exists.")
 
@@ -27,6 +35,9 @@ def main(openapi_file: Path, output_path: Path):
     api = Api(yaml_data["paths"])
     schema = Schema(yaml_data["components"]["schemas"])
     schema.generate_schemas()
-    api.generate_apis(schema_path="schema")
+
+    client_kind = "sync" if sync_req and not async_req else "async"
+    api.generate_apis(schema_path="schema", client_kind=client_kind)  # type: ignore
+
     api.write_api(folder_path)
     schema.write_to_file(folder_path, api.query_param_schemas)

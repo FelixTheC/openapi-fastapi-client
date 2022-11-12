@@ -1,5 +1,6 @@
 from pathlib import Path
 from string import Template
+from typing import Literal
 
 import black
 import isort
@@ -27,8 +28,11 @@ class Api:
         self.schema_imports = set()
         self.query_param_schemas = []
 
-    def generate_base_imports(self):
-        self.data.append("import requests")
+    def generate_base_imports(self, client_kind: Literal["sync", "async"] = "sync"):
+        if client_kind == "sync":
+            self.data.append("import requests")
+        else:
+            self.data.append("import aiohttp")
         self.data.append("from typing import Any, Optional")
         self.data.append("\n")
 
@@ -62,7 +66,7 @@ class Api:
                     if component_ref:
                         self.schema_imports.add(component_ref.split("/")[-1])
 
-    def generate_request_functions(self):
+    def generate_request_functions(self, client_kind: Literal["sync", "async"] = "sync"):
         for url, val in self.paths.items():
             function_info = get_function_info_dict()
             function_info["url"] = url
@@ -140,9 +144,135 @@ class Api:
                                 function_info["response_obj"] = None
                             else:
                                 function_info["response_obj"] = resp_ref.split("/")[-1]
-                self.data.append(self.create_request_function_str(function_info))
+                self.data.append(self.create_request_function_str(function_info, client_kind))
 
-    def create_request_function_str(self, data: dict) -> str:
+    def create_async_request(self, data: dict):
+        if data["query_parameters"] and not data["path_parameters"]:
+            function_str = Template(
+                """async def $function_name($function_params)$response_type:
+        
+    headers_ = headers if headers is not None else {}
+    proxies_ = proxies if proxies is not None else {}
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post("$url", params=params.dict(), $call_params) as resp:
+    
+            if resp.ok:
+                $return_response
+            else:
+                return None
+            """
+            )
+        elif data["path_parameters"] and not data["query_parameters"]:
+            function_str = Template(
+                """async def $function_name($function_params)$response_type:
+    url = f"$url"
+    headers_ = headers if headers is not None else {}
+    proxies_ = proxies if proxies is not None else {}
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url=url, $call_params) as resp:
+    
+            if resp.ok:
+                $return_response
+            else:
+                return None
+            """
+            )
+        elif data["path_parameters"] and data["query_parameters"]:
+            function_str = Template(
+                """async def $function_name($function_params)$response_type:
+    url = f"$url"
+    
+    headers_ = headers if headers is not None else {}
+    proxies_ = proxies if proxies is not None else {}
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url=url, params=params.dict(), $call_params) as resp:
+    
+            if resp.ok:
+                $return_response
+            else:
+                return None
+            """
+            )
+        else:
+            function_str = Template(
+                """async def $function_name($function_params)$response_type:
+    headers_ = headers if headers is not None else {}
+    proxies_ = proxies if proxies is not None else {}
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url="$url", $call_params) as resp:
+    
+            if resp.ok:
+                $return_response
+            else:
+                return None
+                """
+            )
+        return function_str
+
+    def create_sync_request(self, data:dict):
+        if data["query_parameters"] and not data["path_parameters"]:
+            function_str = Template(
+                """def $function_name($function_params)$response_type:
+        
+            headers_ = headers if headers is not None else {}
+            proxies_ = proxies if proxies is not None else {}
+            
+            response_obj = requests.$method(url="$url", params=params.dict(), $call_params)
+            
+            if response_obj.ok:
+                return $return_response
+            return None
+            """
+            )
+        elif data["path_parameters"] and not data["query_parameters"]:
+            function_str = Template(
+                """def $function_name($function_params)$response_type:
+            url = f"$url"
+            headers_ = headers if headers is not None else {}
+            proxies_ = proxies if proxies is not None else {}
+            
+            response_obj = requests.$method(url=url, $call_params)
+            
+            if response_obj.ok:
+                return $return_response
+            return None
+            """
+                )
+        elif data["path_parameters"] and data["query_parameters"]:
+            function_str = Template(
+                """def $function_name($function_params)$response_type:
+            url = f"$url"
+            
+            headers_ = headers if headers is not None else {}
+            proxies_ = proxies if proxies is not None else {}
+            
+            response_obj = requests.$method(url=url, params=params.dict(), $call_params)
+            
+            if response_obj.ok:
+                return $return_response
+            return None
+            """
+            )
+        else:
+            function_str = Template(
+                """def $function_name($function_params)$response_type:
+            headers_ = headers if headers is not None else {}
+            proxies_ = proxies if proxies is not None else {}
+            
+            response_obj = requests.$method(url="$url", $call_params)
+            
+            if response_obj.ok:
+                return $return_response
+            return None
+                """
+            )
+        return function_str
+
+    def create_request_function_str(self, data: dict, client_kind: Literal["sync", "async"] = "sync") -> str:
         path_parameters = ", ".join(data["path_parameters"])
 
         function_head_list = []
@@ -161,62 +291,10 @@ class Api:
         )
         request_call_params.extend(["headers=headers_, proxies=proxies_, **kwargs"])
 
-        if data["query_parameters"] and not data["path_parameters"]:
-            function_str = Template(
-                """def $function_name($function_params)$response_type:
-    
-    headers_ = headers if headers is not None else {}
-    proxies_ = proxies if proxies is not None else {}
-    
-    response_obj = requests.$method(url="$url", params=params.dict(), $call_params)
-    
-    if response_obj.ok:
-        return $return_response
-    return None
-                """
-            )
-        elif data["path_parameters"] and not data["query_parameters"]:
-            function_str = Template(
-                """def $function_name($function_params)$response_type:
-    url = f"$url"
-    headers_ = headers if headers is not None else {}
-    proxies_ = proxies if proxies is not None else {}
-    
-    response_obj = requests.$method(url=url, $call_params)
-    
-    if response_obj.ok:
-        return $return_response
-    return None
-                """
-            )
-        elif data["path_parameters"] and data["query_parameters"]:
-            function_str = Template(
-                """def $function_name($function_params)$response_type:
-    url = f"$url"
-    
-    headers_ = headers if headers is not None else {}
-    proxies_ = proxies if proxies is not None else {}
-    
-    response_obj = requests.$method(url=url, params=params.dict(), $call_params)
-    
-    if response_obj.ok:
-        return $return_response
-    return None
-                """
-            )
+        if client_kind == "sync":
+            function_str = self.create_sync_request(data)
         else:
-            function_str = Template(
-                """def $function_name($function_params)$response_type:
-    headers_ = headers if headers is not None else {}
-    proxies_ = proxies if proxies is not None else {}
-    
-    response_obj = requests.$method(url="$url", $call_params)
-    
-    if response_obj.ok:
-        return $return_response
-    return None
-                """
-            )
+            function_str = self.create_async_request(data)
 
         if response_obj := data["response_obj"]:
             response_type = f"-> Optional[{response_obj}]"
@@ -224,9 +302,21 @@ class Api:
             response_type = "-> Any"
 
         if response_obj := data["response_obj"]:
-            return_response = f"{response_obj}(**response_obj.json())"
+            if client_kind == "sync":
+                return_response = f"{response_obj}(**response_obj.json())"
+            else:
+                return_response = Template("""
+                    data = await resp.json()
+                    return $resp_obj(**data)
+                """).substitute(resp_obj=response_obj)
         else:
-            return_response = f"response_obj.json()"
+            if client_kind == "sync":
+                return_response = f"response_obj.json()"
+            else:
+                return_response = Template("""
+                data = await resp.json()
+                return data
+                """).substitute()
 
         return function_str.substitute(
             url=data["url"],
@@ -239,10 +329,10 @@ class Api:
             response_type=response_type,
         )
 
-    def generate_apis(self, schema_path: str) -> None:
-        self.generate_base_imports()
+    def generate_apis(self, schema_path: str, client_kind: Literal["sync", "async"] = "sync") -> None:
+        self.generate_base_imports(client_kind)
         self.generate_obj_imports()
-        self.generate_request_functions()
+        self.generate_request_functions(client_kind)
         objs_str = ",\n".join(
             [
                 obj
