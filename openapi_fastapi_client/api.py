@@ -39,9 +39,9 @@ class Api:
             self.data.append("import requests")
         else:
             self.data.append("import aiohttp")
-        self.data.extend(["from typing import Any, Optional",
-                          "\n",
-                          f"BASE_URL = '{self.base_url}'"])
+        self.data.extend(
+            ["from typing import Any, Optional", "\n", f"BASE_URL = '{self.base_url}'"]
+        )
 
     def get_component_obj_name(self, data: dict) -> str | None:
         if json_body := data["content"].get("application/json"):
@@ -365,6 +365,6 @@ class Api:
     def write_api(self, folder_path: Path):
         text = black.format_str("\n".join(self.data), mode=black.Mode())
 
-        with (folder_path / Path("api.py")) as file:
-            file.write_text(text)
-            isort.api.sort_file(file)
+        file = folder_path / Path("api.py")
+        file.write_text(text)
+        isort.api.sort_file(file)

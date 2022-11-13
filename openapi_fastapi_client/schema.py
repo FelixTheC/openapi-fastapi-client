@@ -72,7 +72,7 @@ class Schema:
                         if format_ := type_info.get("format"):
                             type_hint = STR_FORMAT.get(format_, "str")
                         elif enum_ := type_info.get("enum"):
-                            enum_name = self.create_enum(name, enum_)
+                            enum_name = self.create_enum(f"{class_name}_{name}", enum_)
                             type_hint = enum_name
                         else:
                             type_hint = "str"
