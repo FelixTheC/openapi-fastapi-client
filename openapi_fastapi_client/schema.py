@@ -16,6 +16,15 @@ from openapi_fastapi_client.helpers import (
 
 
 class Schema:
+    __slots__ = (
+        "data",
+        "components",
+        "schema_imports",
+        "enums",
+        "query_param_schemas",
+        "referenced_class",
+    )
+
     def __init__(self, components: dict):
         self.data = []
         self.components = components
