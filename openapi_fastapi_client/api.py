@@ -162,7 +162,7 @@ class Api:
     proxies_ = proxies if proxies is not None else {}
     
     async with aiohttp.ClientSession() as session:
-        async with session.post(f"{BASE_URL}$url", params=params.dict(), $call_params) as resp:
+        async with session.post(f"{BASE_URL}$url", params=params.dict(exclude_unset=True), $call_params) as resp:
     
             if resp.ok:
                 $return_response
@@ -195,7 +195,7 @@ class Api:
     proxies_ = proxies if proxies is not None else {}
 
     async with aiohttp.ClientSession() as session:
-        async with session.post(url=url, params=params.dict(), $call_params) as resp:
+        async with session.post(url=url, params=params.dict(exclude_unset=True), $call_params) as resp:
     
             if resp.ok:
                 $return_response
@@ -228,7 +228,7 @@ class Api:
             headers_ = headers if headers is not None else {}
             proxies_ = proxies if proxies is not None else {}
             
-            response_obj = requests.$method(url=f"{BASE_URL}$url", params=params.dict(), $call_params)
+            response_obj = requests.$method(url=f"{BASE_URL}$url", params=params.dict(exclude_unset=True), $call_params)
             
             if response_obj.ok:
                 return $return_response
@@ -257,7 +257,7 @@ class Api:
             headers_ = headers if headers is not None else {}
             proxies_ = proxies if proxies is not None else {}
             
-            response_obj = requests.$method(url=url, params=params.dict(), $call_params)
+            response_obj = requests.$method(url=url, params=params.dict(exclude_unset=True), $call_params)
             
             if response_obj.ok:
                 return $return_response
