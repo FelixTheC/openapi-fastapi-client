@@ -18,6 +18,7 @@ def function_like_name_to_class_name(val: str, /):
             return val_
         else:
             return val_.title()
+
     return "".join([to_title(obj) for obj in val.split("_")])
 
 
@@ -68,17 +69,17 @@ def number_constraints(type_info: dict) -> str:
 
 def create_validator(field_name: str, field_type: str):
     function_name = f"optional_{field_name}"
-    return Template("""
+    return Template(
+        """
     @validator("$field_name")
     def $function_name(cls, val: $field_type):
         if val is not None:
             return val
         else:
             raise ValueError("$field_name may not be None")
-        """).substitute(field_name=field_name,
-                        function_name=function_name,
-                        field_type=field_type)
+        """
+    ).substitute(field_name=field_name, function_name=function_name, field_type=field_type)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(function_like_name_to_class_name("salutation"))
