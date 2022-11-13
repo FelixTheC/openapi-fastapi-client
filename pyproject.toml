@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "openapi-fastapi-client"
-version = "0.1.0"
+version = "0.1.1"
 description = "A tool to autogenerate FastApi Clients from given openapi.yaml."
 authors = ["FelixTheC <felixeisenmenger@gmx.net>"]
 license = "MIT"
