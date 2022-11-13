@@ -38,8 +38,9 @@ def test_base_imports(example_api, client_kind):
     assert "BASE_URL = 'http://localhost:8080'" in example_api.data
 
 
-def test_create_valid_api_file(example_api, test_folder, create_dummy_schema_cls):
-    example_api.generate_apis(".pet_test_store.schema")
+@pytest.mark.parametrize("client_kind", ("sync", "async"))
+def test_create_valid_api_file(example_api, test_folder, create_dummy_schema_cls, client_kind):
+    example_api.generate_apis(".pet_test_store.schema", client_kind=client_kind)
     example_api.write_api(test_folder)
     assert (test_folder / Path("api.py")).exists()
     with (test_folder / Path("api.py")).open("r") as file:
