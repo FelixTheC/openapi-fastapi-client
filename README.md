@@ -38,4 +38,4 @@ openapi-fastapi-client ./openapi.yaml ./my-client --async
 openapi-fastapi-client --help
 ```
 
-![](openapi-fastapi-client.gif)
+![](openapi-fastapi-client_long.gif)
