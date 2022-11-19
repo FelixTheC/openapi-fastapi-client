@@ -5,6 +5,7 @@ import typer
 import yaml
 
 from openapi_fastapi_client.api import Api
+from openapi_fastapi_client.helpers import get_all_tags
 from openapi_fastapi_client.schema import Schema
 
 app = typer.Typer()
@@ -34,15 +35,21 @@ def main(
         with (folder_path / Path("__init__.py")).open("w") as file:
             file.write("\n")
 
-    api = Api(
-        yaml_data["paths"],
-        base_url=yaml_data.get("servers", [{"url": "http://localhost:8080"}])[0]["url"],
-    )
     schema = Schema(yaml_data["components"]["schemas"])
     schema.generate_schemas()
 
-    client_kind = "sync" if sync_req and not async_req else "async"
-    api.generate_apis(schema_path="schema", client_kind=client_kind)  # type: ignore
+    query_schema_params = []
+    for tag in get_all_tags(yaml_data["paths"]):
+        api = Api(
+            yaml_data["paths"],
+            base_url=yaml_data.get("servers", [{"url": "http://localhost:8080"}])[0]["url"],
+            only_tag=tag,
+        )
 
-    api.write_api(folder_path)
-    schema.write_to_file(folder_path, api.query_param_schemas)
+        client_kind = "sync" if sync_req and not async_req else "async"
+        api.generate_apis(schema_path="schema", client_kind=client_kind)  # type: ignore
+        query_schema_params.extend(api.query_param_schemas)
+
+        api.write_api(folder_path)
+
+    schema.write_to_file(folder_path, query_schema_params)

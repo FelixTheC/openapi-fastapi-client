@@ -81,5 +81,15 @@ def create_validator(field_name: str, field_type: str):
     ).substitute(field_name=field_name, function_name=function_name, field_type=field_type)
 
 
+def get_all_tags(paths: dict) -> set:
+    return set(
+        [
+            val_obj["tags"][0].replace(" ", "")
+            for url, val in paths.items()
+            for key, val_obj in val.items()
+        ]
+    )
+
+
 if __name__ == "__main__":
     print(function_like_name_to_class_name("salutation"))
