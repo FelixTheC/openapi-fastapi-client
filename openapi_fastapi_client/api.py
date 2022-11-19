@@ -18,17 +18,19 @@ def get_function_info_dict():
         "request_obj": "",
         "application_type": "application/json",
         "response_obj": "",
+        "is_list": False,
     }
 
 
 class Api:
-    __slots__ = ("data", "paths", "schema_imports", "query_param_schemas", "base_url")
+    __slots__ = ("data", "paths", "schema_imports", "query_param_schemas", "base_url", "only_tag")
 
-    def __init__(self, paths: dict, base_url: str):
+    def __init__(self, paths: dict, base_url: str, only_tag: str):
         self.data = []
         self.paths = paths
         self.schema_imports = set()
         self.query_param_schemas = []
+        self.only_tag = only_tag
         if base_url.endswith("/"):
             self.base_url = base_url[:-1]
         else:
@@ -62,6 +64,9 @@ class Api:
     def generate_obj_imports(self) -> None:
         for level_0 in self.paths.values():
             for val in level_0.values():
+                tag_name = val["tags"][0].replace(" ", "")
+                if tag_name != self.only_tag:
+                    continue
                 if response := val.get("responses"):
                     for resp_val in response.values():
                         if "content" in resp_val:
@@ -78,9 +83,12 @@ class Api:
             function_info = get_function_info_dict()
             function_info["url"] = url
             for key, val_obj in val.items():
+                tag_name = val_obj["tags"][0].replace(" ", "")
+                if tag_name != self.only_tag:
+                    continue
                 function_info["method"] = key
                 function_info["function_name"] = (
-                    f"{val_obj['tags'][0].replace(' ', '')}_"
+                    f"{tag_name}_"
                     f"{key}_"
                     f"{operation_id_to_function_name(val_obj['operationId'])}"
                 )
@@ -128,8 +136,9 @@ class Api:
                         if resp_content := content.get("content"):
                             if "items" in resp_content["application/json"]["schema"]:
                                 resp_ref = resp_content["application/json"]["schema"]["items"].get(
-                                    "$ref", "{}"
+                                    "$ref", "Any"
                                 )
+                                function_info["is_list"] = True
                             elif "$ref" in resp_content["application/json"]["schema"]:
                                 resp_ref = resp_content["application/json"]["schema"]["$ref"]
                             elif (
@@ -147,6 +156,7 @@ class Api:
                                     ]
                                 except KeyError:
                                     continue
+
                             if resp_ref_ := resp_ref.split("/")[-1] in ("NoneType", "Metaclass"):
                                 function_info["response_obj"] = None
                             else:
@@ -306,20 +316,34 @@ class Api:
             function_str = self.create_async_request(data)
 
         if response_obj := data["response_obj"]:
-            response_type = f"-> Optional[{response_obj}]"
+            if data["is_list"]:
+                response_type = f"-> Optional[list[{response_obj}]]"
+            else:
+                response_type = f"-> Optional[{response_obj}]"
         else:
             response_type = "-> Any"
 
         if response_obj := data["response_obj"]:
             if client_kind == "sync":
-                return_response = f"{response_obj}(**response_obj.json())"
+                if data["is_list"]:
+                    return_response = f"[{response_obj}(**obj) for obj in response_obj.json()]"
+                else:
+                    return_response = f"{response_obj}(**response_obj.json())"
             else:
-                return_response = Template(
+                if data["is_list"]:
+                    return_response = Template(
+                        """
+                        data = await resp.json()
+                        return [$resp_obj(**obj) for obj in data]
                     """
-                    data = await resp.json()
-                    return $resp_obj(**data)
-                """
-                ).substitute(resp_obj=response_obj)
+                    ).substitute(resp_obj=response_obj)
+                else:
+                    return_response = Template(
+                        """
+                        data = await resp.json()
+                        return $resp_obj(**data)
+                    """
+                    ).substitute(resp_obj=response_obj)
         else:
             if client_kind == "sync":
                 return_response = f"response_obj.json()"
@@ -355,16 +379,17 @@ class Api:
                 if obj not in ("AnyType", "Metaclass", "NoneType", "Any")
             ]
         )
-        data = [
-            f"from {schema_path} import ({objs_str})",
-            "\n",
-        ] + self.data
-        data.append("\n")
-        self.data = data
+        if objs_str:
+            data = [
+                f"from {schema_path} import ({objs_str})",
+                "\n",
+            ] + self.data
+            data.append("\n")
+            self.data = data
 
     def write_api(self, folder_path: Path):
         text = black.format_str("\n".join(self.data), mode=black.Mode())
 
-        file = folder_path / Path("api.py")
+        file = folder_path / Path(f"{self.only_tag.lower()}.py")
         file.write_text(text)
         isort.api.sort_file(file)

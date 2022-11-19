@@ -1,10 +1,12 @@
 [tool.poetry]
 name = "openapi-fastapi-client"
-version = "0.1.1"
+version = "0.2.0"
 description = "A tool to autogenerate FastApi Clients from given openapi.yaml."
 authors = ["FelixTheC <felixeisenmenger@gmx.net>"]
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/FelixTheC/openapi-fastapi-client"
+keywords = ["openapi", "pydantic", "python3"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
