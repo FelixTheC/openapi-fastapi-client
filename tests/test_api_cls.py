@@ -6,7 +6,7 @@ from openapi_fastapi_client.api import Api
 
 
 def test_create_api_instance(openapi_paths):
-    api = Api(openapi_paths, "http://localhost:8080")
+    api = Api(openapi_paths, "http://localhost:8080", "pet")
     assert not api.data  # empty on creation
     assert not api.schema_imports  # empty on creation
     assert not api.query_param_schemas  # empty on creation
@@ -16,7 +16,7 @@ def test_create_api_instance(openapi_paths):
 
 
 def test_create_api_instance_with_url_ending_with_slash_removes_slash(openapi_paths):
-    api = Api(openapi_paths, "http://localhost:8080/")
+    api = Api(openapi_paths, "http://localhost:8080/", "pet")
     assert api.base_url == "http://localhost:8080"
 
 
@@ -42,6 +42,6 @@ def test_base_imports(example_api, client_kind):
 def test_create_valid_api_file(example_api, test_folder, create_dummy_schema_cls, client_kind):
     example_api.generate_apis(".pet_test_store.schema", client_kind=client_kind)
     example_api.write_api(test_folder)
-    assert (test_folder / Path("api.py")).exists()
-    with (test_folder / Path("api.py")).open("r") as file:
+    assert (test_folder / Path("pet.py")).exists()
+    with (test_folder / Path("pet.py")).open("r") as file:
         exec(file.read(), globals(), {})

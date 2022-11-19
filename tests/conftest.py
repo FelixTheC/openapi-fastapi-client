@@ -30,7 +30,7 @@ def openapi_components(openapi_file) -> dict:
 def example_api(openapi_paths) -> object:
     from openapi_fastapi_client.api import Api
 
-    return Api(openapi_paths, "http://localhost:8080")
+    return Api(openapi_paths, "http://localhost:8080", "pet")
 
 
 @pytest.fixture(scope="function")
