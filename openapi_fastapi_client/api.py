@@ -67,12 +67,14 @@ class Api:
                 tag_name = val["tags"][0].replace(" ", "")
                 if tag_name != self.only_tag:
                     continue
+
                 if response := val.get("responses"):
-                    for resp_val in response.values():
+                    for resp_key, resp_val in response.items():
                         if "content" in resp_val:
                             component_ref = self.get_component_obj_name(resp_val)
                             if component_ref:
                                 self.schema_imports.add(component_ref.split("/")[-1])
+
                 if request_body := val.get("requestBody"):
                     component_ref = self.get_component_obj_name(request_body)
                     if component_ref:
@@ -106,6 +108,7 @@ class Api:
                 if parameters := val_obj.get("parameters"):
                     query_params = set()
                     for obj in parameters:
+                        print(f"{obj = }")
                         if obj["in"] == "path":
                             param_name = operation_id_to_function_name(obj["name"])
                             param_type = obj["schema"]["type"]
@@ -132,7 +135,9 @@ class Api:
                         function_info["query_parameters"] = param_schema_name
 
                 if responses := val_obj.get("responses"):
-                    for content in responses.values():
+                    for key, content in responses.items():
+                        if key != 200:
+                            continue
                         if resp_content := content.get("content"):
                             if "items" in resp_content["application/json"]["schema"]:
                                 resp_ref = resp_content["application/json"]["schema"]["items"].get(

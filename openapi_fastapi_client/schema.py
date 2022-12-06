@@ -39,14 +39,14 @@ class Schema:
         self.schema_imports.add("from pydantic import BaseModel")
 
     def create_enum(self, attr_name: str, enum_values: list):
-        enum_name = f"{function_like_name_to_class_name(attr_name)}Enum"
+        enum_name = f"{function_like_name_to_class_name(attr_name)}"
         if enum_name in self.enums.get(enum_name, []):
             return enum_name
         else:
             self.schema_imports.add("from enum import Enum")
             self.enums[enum_name] = {
                 "class_name": enum_name,
-                "attributes": [f"{obj.upper()} = '{obj}'" for obj in enum_values],
+                "attributes": [f"{obj.upper().replace(' ', '_')} = '{obj}'" for obj in enum_values],
             }
             return enum_name
 
@@ -58,17 +58,26 @@ class Schema:
             "validators": [],
             "index": 0 if class_name in self.referenced_class else 10,
         }
+        if "properties" not in component and "enum" in component:
+            self.create_enum(component["title"], component["enum"])
+            return
+
         for name, type_info in component["properties"].items():
             is_optional = name in component.get("required", [])
             delimiter = ": "
-            match type_info.get("type", "reference"):
+
+            type_data = ""
+            for key in ("allOf", "type", "reference"):
+                if key in type_info:
+                    type_data = type_info[key]
+
+            match type_data:
                 case "string":
                     if type_info.get("maxLength") or type_info.get("minLength"):
                         self.schema_imports.add("from pydantic import constr")
                         params = string_constraints(type_info)
                         type_hint = f"constr({params})"
                     else:
-                        delimiter = ": "
                         if format_ := type_info.get("format"):
                             type_hint = STR_FORMAT.get(format_, "str")
                         elif enum_ := type_info.get("enum"):
@@ -82,7 +91,6 @@ class Schema:
                         params = number_constraints(type_info)
                         type_hint = f"conint({params})"
                     else:
-                        delimiter = ": "
                         type_hint = "int"
                 case "number":
                     if type_info.get("minimum") or type_info.get("maximum"):
@@ -90,10 +98,8 @@ class Schema:
                         params = number_constraints(type_info)
                         type_hint = f"confloat({params})"
                     else:
-                        delimiter = ": "
                         type_hint = "float"
                 case "array":
-                    delimiter = ": "
                     if reference := type_info["items"].get("$ref"):
                         ref = function_like_name_to_class_name(reference.split("/")[-1])
                         self.referenced_class.add(ref)
@@ -102,11 +108,14 @@ class Schema:
                     else:
                         type_hint = "list"
                 case "boolean":
-                    delimiter = ": "
                     type_hint = "bool"
                 case "reference":
-                    delimiter = ": "
                     ref = function_like_name_to_class_name(type_info["$ref"].split("/")[-1])
+                    self.referenced_class.add(ref)
+                    class_info["index"] = class_info["index"] + 1
+                    type_hint = ref
+                case [{"$ref": str() as refer}]:
+                    ref = refer.split("/")[-1]
                     self.referenced_class.add(ref)
                     class_info["index"] = class_info["index"] + 1
                     type_hint = ref
@@ -129,7 +138,9 @@ class Schema:
     def generate_schemas(self):
         self.generate_base_imports()
         for key, val in self.components.items():
-            self.data.append(self.create_attribute(key, val))
+            data = self.create_attribute(key, val)
+            if data:
+                self.data.append(data)
         self.data.sort(key=itemgetter("index"))
 
     def create_enum_class(self, data: dict):

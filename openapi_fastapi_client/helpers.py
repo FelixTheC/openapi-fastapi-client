@@ -72,7 +72,7 @@ def create_validator(field_name: str, field_type: str):
     return Template(
         """
     @validator("$field_name")
-    def $function_name(cls, val: $field_type):
+    def $function_name(cls, val: $field_type) -> $field_type:
         if val is not None:
             return val
         else:
