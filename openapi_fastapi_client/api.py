@@ -390,14 +390,23 @@ class Api:
                 ).substitute()
 
         docstring_txt = ""
-        if txt := data["docstring"]:
+        if txt := data["docstring"] and client_kind == "sync":
             docstring_txt = Template(
-                """
-            '''
+                '''
+            """
 Headers
 -------$docstring
-            '''
-                """
+            """
+                '''
+            ).substitute(docstring=txt)
+        if txt := data["docstring"] and client_kind == "async":
+            docstring_txt = Template(
+                '''
+    """
+Headers
+-------$docstring
+    """
+                '''
             ).substitute(docstring=txt)
 
         return function_str.substitute(
@@ -435,7 +444,6 @@ Headers
 
     def write_api(self, folder_path: Path):
         text = black.format_str("\n".join(self.data), mode=black.Mode())
-
         file = folder_path / Path(f"{self.only_tag.lower()}.py")
         file.write_text(text)
         isort.api.sort_file(file)
