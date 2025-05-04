@@ -21,7 +21,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install poetry==2.1.2
-          poetry lock
+          rm poetry.lock
           poetry install
 
       - name: Check with isort
