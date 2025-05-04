@@ -41,8 +41,8 @@ def test_create_working_pydantic_models(openapi_components, test_folder):
         "Order",
         "Pet",
         "User",
-        "PetStatusEnum",
-        "OrderStatusEnum",
+        "PetStatus",
+        "OrderStatus",
     ]:
         assert obj in module_dir
 
@@ -57,10 +57,10 @@ def test_create_unique_enums(openapi_components, test_folder):
     schema.write_to_file(test_folder)
 
     module = importlib.import_module(".schema", ".tests." + test_folder.name)
-    assert module.PetStatusEnum.AVAILABLE.value == "available"
-    assert module.PetStatusEnum.PENDING.value == "pending"
-    assert module.PetStatusEnum.SOLD.value == "sold"
+    assert module.PetStatus.AVAILABLE.value == "available"
+    assert module.PetStatus.PENDING.value == "pending"
+    assert module.PetStatus.SOLD.value == "sold"
 
-    assert module.OrderStatusEnum.PLACED.value == "placed"
-    assert module.OrderStatusEnum.APPROVED.value == "approved"
-    assert module.OrderStatusEnum.DELIVERED.value == "delivered"
+    assert module.OrderStatus.PLACED.value == "placed"
+    assert module.OrderStatus.APPROVED.value == "approved"
+    assert module.OrderStatus.DELIVERED.value == "delivered"

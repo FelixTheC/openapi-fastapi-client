@@ -125,7 +125,7 @@ class Schema:
             if is_optional and type_hint is not None:
                 class_info["attributes"].append(f"{name}{delimiter}Optional[{type_hint}] = None")
                 if not type_info.get("nullable", False):
-                    self.schema_imports.add("from pydantic import validator")
+                    self.schema_imports.add("from pydantic import field_validator")
                     try:
                         field_type = TYPE_CONVERTION[type_info["type"]]
                     except KeyError:
