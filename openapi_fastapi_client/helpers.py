@@ -68,11 +68,12 @@ def number_constraints(type_info: dict) -> str:
 
 
 def create_validator(field_name: str, field_type: str):
-    function_name = f"optional_{field_name}"
+    function_name = f"optional_{operation_id_to_function_name(field_name)}"
     return Template(
         """
-    @validator("$field_name")
-    def $function_name(cls, val: $field_type):
+    @classmethod
+    @field_validator("$field_name")
+    def $function_name(cls, val: $field_type) -> $field_type:
         if val is not None:
             return val
         else:

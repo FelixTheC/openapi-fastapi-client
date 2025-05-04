@@ -19,6 +19,7 @@ def get_function_info_dict():
         "application_type": "application/json",
         "response_obj": "",
         "is_list": False,
+        "docstring": "",
     }
 
 
@@ -67,12 +68,14 @@ class Api:
                 tag_name = val["tags"][0].replace(" ", "")
                 if tag_name != self.only_tag:
                     continue
+
                 if response := val.get("responses"):
-                    for resp_val in response.values():
+                    for resp_key, resp_val in response.items():
                         if "content" in resp_val:
                             component_ref = self.get_component_obj_name(resp_val)
                             if component_ref:
                                 self.schema_imports.add(component_ref.split("/")[-1])
+
                 if request_body := val.get("requestBody"):
                     component_ref = self.get_component_obj_name(request_body)
                     if component_ref:
@@ -82,10 +85,12 @@ class Api:
         for url, val in self.paths.items():
             function_info = get_function_info_dict()
             function_info["url"] = url
+
             for key, val_obj in val.items():
                 tag_name = val_obj["tags"][0].replace(" ", "")
                 if tag_name != self.only_tag:
                     continue
+
                 function_info["method"] = key
                 function_info["function_name"] = (
                     f"{tag_name}_"
@@ -93,6 +98,7 @@ class Api:
                     f"{operation_id_to_function_name(val_obj['operationId'])}"
                 )
                 function_info["function_name"] = function_info["function_name"].lower()
+
                 if req_body := val_obj.get("requestBody"):
                     if json_data := req_body["content"].get("application/json"):
                         if "items" in json_data["schema"]:
@@ -123,6 +129,11 @@ class Api:
                                 )
 
                             query_params.add(f"{obj['name']}: {type_info}")
+                        elif obj["in"] == "header":
+                            optional_ = "" if obj["required"] else ", optional"
+                            header_info = f"{obj['name']} : {TYPE_CONVERTION[obj['schema']['type']]}{optional_}"
+                            function_info["docstring"] += f"\n{header_info}"
+
                     if query_params:
                         query_param_schema, param_schema_name = self.create_query_param_typedict(
                             function_info["function_name"], query_params
@@ -132,7 +143,9 @@ class Api:
                         function_info["query_parameters"] = param_schema_name
 
                 if responses := val_obj.get("responses"):
-                    for content in responses.values():
+                    for key, content in responses.items():
+                        if key != 200:
+                            continue
                         if resp_content := content.get("content"):
                             if "items" in resp_content["application/json"]["schema"]:
                                 resp_ref = resp_content["application/json"]["schema"]["items"].get(
@@ -167,7 +180,8 @@ class Api:
         if data["query_parameters"] and not data["path_parameters"]:
             function_str = Template(
                 """async def $function_name($function_params)$response_type:
-        
+    $docstring_info
+    
     headers_ = headers if headers is not None else {}
     proxies_ = proxies if proxies is not None else {}
     
@@ -183,6 +197,8 @@ class Api:
         elif data["path_parameters"] and not data["query_parameters"]:
             function_str = Template(
                 """async def $function_name($function_params)$response_type:
+    $docstring_info
+    
     url = f"{BASE_URL}$url"
     headers_ = headers if headers is not None else {}
     proxies_ = proxies if proxies is not None else {}
@@ -199,6 +215,8 @@ class Api:
         elif data["path_parameters"] and data["query_parameters"]:
             function_str = Template(
                 """async def $function_name($function_params)$response_type:
+    $docstring_info
+    
     url = f"{BASE_URL}$url"
     
     headers_ = headers if headers is not None else {}
@@ -216,6 +234,8 @@ class Api:
         else:
             function_str = Template(
                 """async def $function_name($function_params)$response_type:
+    $docstring_info
+    
     headers_ = headers if headers is not None else {}
     proxies_ = proxies if proxies is not None else {}
     
@@ -234,7 +254,8 @@ class Api:
         if data["query_parameters"] and not data["path_parameters"]:
             function_str = Template(
                 """def $function_name($function_params)$response_type:
-        
+            $docstring_info
+
             headers_ = headers if headers is not None else {}
             proxies_ = proxies if proxies is not None else {}
             
@@ -248,6 +269,8 @@ class Api:
         elif data["path_parameters"] and not data["query_parameters"]:
             function_str = Template(
                 """def $function_name($function_params)$response_type:
+            $docstring_info
+            
             url = f"{BASE_URL}$url"
             headers_ = headers if headers is not None else {}
             proxies_ = proxies if proxies is not None else {}
@@ -262,6 +285,8 @@ class Api:
         elif data["path_parameters"] and data["query_parameters"]:
             function_str = Template(
                 """def $function_name($function_params)$response_type:
+            $docstring_info
+            
             url = f"{BASE_URL}$url"
             
             headers_ = headers if headers is not None else {}
@@ -277,6 +302,8 @@ class Api:
         else:
             function_str = Template(
                 """def $function_name($function_params)$response_type:
+            $docstring_info
+            
             headers_ = headers if headers is not None else {}
             proxies_ = proxies if proxies is not None else {}
             
@@ -299,14 +326,21 @@ class Api:
 
         if data["request_obj"]:
             function_head_list.extend([f'req_data: {data["request_obj"]}', "/"])
-            request_call_params.append("json=req_data.dict(exclude_unset=True)")
+            if data["is_list"]:
+                request_call_params.append(
+                    "json=[obj.dict(exclude_unset=True) for obj in req_data]"
+                )
+            else:
+                request_call_params.append("json=req_data.dict(exclude_unset=True)")
+
         if path_parameters:
             function_head_list.append(path_parameters)
         function_head_list.append("*")
+
         if query_param := data["query_parameters"]:
             function_head_list.append(f"params: {query_param}")
         function_head_list.extend(
-            ["headers: Optional[dict] = None", "proxies: Optional[dict] = None", "**kwargs"]
+            ["headers: Optional[dict] = None", "proxies: Optional[dict] = None", "**kwargs: dict"]
         )
         request_call_params.extend(["headers=headers_, proxies=proxies_, **kwargs"])
 
@@ -355,6 +389,26 @@ class Api:
                 """
                 ).substitute()
 
+        docstring_txt = ""
+        if txt := data["docstring"] and client_kind == "sync":
+            docstring_txt = Template(
+                '''
+            """
+Headers
+-------$docstring
+            """
+                '''
+            ).substitute(docstring=txt)
+        if txt := data["docstring"] and client_kind == "async":
+            docstring_txt = Template(
+                '''
+    """
+Headers
+-------$docstring
+    """
+                '''
+            ).substitute(docstring=txt)
+
         return function_str.substitute(
             url=data["url"],
             method=data["method"],
@@ -364,6 +418,7 @@ class Api:
             resp_obj=data["response_obj"],
             return_response=return_response,
             response_type=response_type,
+            docstring_info=docstring_txt,
         )
 
     def generate_apis(
@@ -389,7 +444,6 @@ class Api:
 
     def write_api(self, folder_path: Path):
         text = black.format_str("\n".join(self.data), mode=black.Mode())
-
         file = folder_path / Path(f"{self.only_tag.lower()}.py")
         file.write_text(text)
         isort.api.sort_file(file)
